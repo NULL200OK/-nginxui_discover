@@ -1,8 +1,8 @@
+
 #!/usr/bin/env python3
 """
 nginxui_discover.py - Nginx UI Instance Discovery & Version Scanner
 Discover Nginx UI web interfaces and identify versions ≤2.3.2 vulnerable to CVE-2026-27944
-
 """
 
 import argparse
@@ -56,15 +56,14 @@ COMMON_PATHS = [
 
 # Nginx UI specific fingerprints
 FINGERPRINTS = {
-    "title": ["Nginx UI", "Nginx-UI", "nginx ui"],
+    "title": ["Nginx UI", "Nginx-UI", "nginx ui", "nginx-ui"],
     "headers": {
-        "server": ["nginx-ui", "nginx-ui-server"],
-        "x-powered-by": ["nginx-ui"]
+        "server": r"nginx-ui(?:-server)?",
+        "x-powered-by": r"nginx-ui"
     },
     "body_patterns": [
         r"nginx.?ui",
-        r"nginxui",
-        r"version\s*:\s*(\d+\.\d+\.\d+[^"]*)",
+        r'version\s*:\s*(\d+\.\d+\.\d+(?:[^"\s]*))',   # fixed line
         r"<title>Nginx UI</title>",
         r"nginx-ui-web"
     ]
@@ -213,12 +212,11 @@ def is_nginx_ui(response: Dict) -> Tuple[bool, float]:
                 reasons.append(f"title contains '{fp_title}'")
     
     # Check headers
-    for header, patterns in FINGERPRINTS['headers'].items():
+    for header, pattern in FINGERPRINTS['headers'].items():
         header_value = headers.get(header, '').lower()
-        for pattern in patterns:
-            if pattern.lower() in header_value:
-                confidence += 0.2
-                reasons.append(f"header '{header}' matches '{pattern}'")
+        if re.search(pattern, header_value, re.IGNORECASE):
+            confidence += 0.2
+            reasons.append(f"header '{header}' matches '{pattern}'")
     
     # Check body patterns
     for pattern in FINGERPRINTS['body_patterns']:
@@ -323,6 +321,8 @@ def generate_targets_from_cidr(cidr: str) -> List[str]:
         return []
 
 def main():
+    global TIMEOUT   # <-- MOVED TO THE TOP
+
     parser = argparse.ArgumentParser(
         description="Nginx UI Discovery Scanner - Find instances of Nginx UI web interface",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -352,8 +352,7 @@ Examples:
     parser.add_argument('--no-banner', action='store_true', help='Disable banner display')
     
     args = parser.parse_args()
-    global TIMEOUT
-    TIMEOUT = args.timeout
+    TIMEOUT = args.timeout   # now updates the global variable
     
     # Display banner
     if not args.no_banner:
